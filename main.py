@@ -46,6 +46,7 @@ except AttributeError:
 
 if __name__ == "__main__":
 
+    verbose = True
     should_animate = True
     should_plot_steps = True
     should_plot = True
@@ -53,12 +54,12 @@ if __name__ == "__main__":
 
     number_walks = 10  # γ: number of walks for each node
     walk_length = 80  # l: length of each walk
-    representation_size = 2  # size of the embedding
+    representation_size = 128  # size of the embedding
     num_workers = 10  # number of thread
     num_iter = 3  # number of overall iteration
-    com_n_init = 3  # number of inits for community embedding (default: 10)
+    com_n_init = 10  # number of inits for community embedding (default: 10)
     reg_covar = 0.00001  # regularization coefficient to ensure positive covar
-    input_file = 'karate_club'  # name of the input file
+    input_file = 'facebook'  # name of the input file
     output_file = input_file  # name of the output file
     batch_size = 50
     window_size = 10  # ζ: windows size used to compute the context embedding
@@ -70,26 +71,27 @@ if __name__ == "__main__":
     come_model_type = "BGMM"  # type of the Community Embedding model: GMM/BGMM
     weight_concentration_prior = 1e-5  # dirichlet concentration of each BGMM component to (de)activate components
 
-    ks = [5]  # number of communities to initialize the GMM/BGMM with
+    ks = [10]  # number of communities to initialize the GMM/BGMM with
     walks_filebase = os.path.join('data', output_file)  # where read/write the sampled path
 
     # CONSTRUCT THE GRAPH
 
     # load from matfile
     # G = graph_utils.load_matfile(os.path.join('./data', input_file, input_file + '.mat'), undirected=True)
-
     # load karate club directly
-    G = nx.karate_club_graph()  # DEBUG run on karate club graph, make sure to mkdir ./data/karate_club
+    # G = nx.karate_club_graph()  # DEBUG run on karate club graph, make sure to mkdir ./data/karate_club
 
     # load from edgelist csv
-    # G = graph_utils.load_edgelist(os.path.join('./data', input_file, input_file + '.csv'), source="u", target="v")
+    G = graph_utils.load_edgelist(os.path.join('./data', input_file, input_file + '.csv'), source="u", target="v")
 
     # DEBUG remove some edges for karate_club
+    '''
     print("PRE NUM_OF_EDGES: ", G.number_of_edges())
     G.remove_edge(33, 23)
     G.remove_edge(0, 1)
     G.remove_edge(32, 30)
     print("POST NUM_OF_EDGES: ", G.number_of_edges())
+    '''
 
     print("G.number_of_nodes: ", G.number_of_nodes())
     print("G.number_of_edges: ", G.number_of_edges())
@@ -163,7 +165,8 @@ if __name__ == "__main__":
                 params_anim = {}
                 com_max_iter += com_iter_step if should_animate else 100
                 if should_animate:
-                    log.info(f"->com_max_iter={com_max_iter}")
+                    if verbose:
+                        log.info(f"->com_max_iter={com_max_iter}")
                     params_anim['max_iter'] = com_max_iter
 
                 com_learner.reset_mixture(model,
@@ -183,18 +186,19 @@ if __name__ == "__main__":
                                                                model,
                                                                i=i,
                                                                i_com=com_learner.n_iter,
-                                                               converged=com_learner.converged)
+                                                               converged=com_learner.converged,
+                                                               show_node_ids=False)
                         anim_artists.append(artists_step)
 
 
                 # community converged?
                 if not com_learner.converged:
                     log.info(f'iter {i}.{com_learner.n_iter} did not converge.')
-                    animate_model()
                 else:
                     log.info(f'iter {i}.{com_learner.n_iter} converged!')
+
+                if should_animate:
                     animate_model()
-                    animate_model()  # if converged, animate twice
 
                 # DEBUG plot after each community iteration
                 if not should_animate and should_plot_steps:
@@ -202,7 +206,7 @@ if __name__ == "__main__":
                                                             labels=model.classify_nodes(),
                                                             means=com_learner.g_mixture.means_,
                                                             covariances=com_learner.g_mixture.covariances_,
-                                                            plot_name=f"k{k}_i{i}_{com_max_iter:03}",
+                                                            plot_name=f"{come_model_type}_k{k}_i{i}_{com_max_iter:03}",
                                                             path=f"./plots/{output_file}",
                                                             save=True)
 
@@ -217,10 +221,11 @@ if __name__ == "__main__":
                                alpha=alpha,
                                chunksize=batch_size)
 
-            log.info('time: %.2fs' % (timeit.default_timer() - start_time))
+            if verbose:
+                log.info('time: %.2fs' % (timeit.default_timer() - start_time))
             save_embedding(model.node_embedding, model.vocab,
                            path=f"data/{output_file}",
-                           file_name=f"{output_file}_alpha-{alpha}_beta-{beta}_ws-{window_size}_neg-{negative}_lr-{lr}_icom-{iter_com}_ind-{iter_node}_k-{model.k}_ds-{down_sampling}")
+                           file_name=f"{output_file}_alpha-{alpha}_beta-{beta}_ws-{window_size}_neg-{negative}_lr-{lr}_icom-{iter_com}_ind-{iter_node}_ds-{down_sampling}_d-{representation_size}_type-{come_model_type}_k-{model.k}")
 
             # DEBUG plot after each ComE iteration
             if not should_animate and should_plot_steps:
@@ -228,20 +233,23 @@ if __name__ == "__main__":
                                                         labels=model.classify_nodes(),
                                                         means=com_learner.g_mixture.means_,
                                                         covariances=com_learner.g_mixture.covariances_,
-                                                        plot_name=f"k{k}_i{i}",
+                                                        plot_name=f"{come_model_type}_d{representation_size}_k{k}_i{i}",
                                                         path=f"./plots/{output_file}",
                                                         save=True)
 
-        # ### print model
+        # compute classifications
         node_classification = model.classify_nodes()
-        print("model:\n",
-              "  model.node_embedding: ", model.node_embedding, "\n",
-              "  model.context_embedding: ", model.context_embedding, "\n",
-              "  model.centroid: ", model.centroid, "\n",
-              "  model.covariance_mat: ", model.covariance_mat, "\n",
-              "  model.inv_covariance_mat: ", model.inv_covariance_mat, "\n",
-              "  model.pi: ", model.pi, "\n",
-              "=>node_classification: ", node_classification, "\n", )
+
+        # ### print model
+        if verbose:
+            print("model:\n",
+                  "  model.node_embedding: ", model.node_embedding, "\n",
+                  "  model.context_embedding: ", model.context_embedding, "\n",
+                  "  model.centroid: ", model.centroid, "\n",
+                  "  model.covariance_mat: ", model.covariance_mat, "\n",
+                  "  model.inv_covariance_mat: ", model.inv_covariance_mat, "\n",
+                  "  model.pi: ", model.pi, "\n",
+                  "=>node_classification: ", node_classification, "\n", )
 
         # ### Animation
         if should_animate:
@@ -249,25 +257,25 @@ if __name__ == "__main__":
             # anim.to_html5_video()
             # export animation as gif:
             # you may need to install "imagemagick" (ex.: brew install imagemagick)
-            anim.save(f"./plots/{output_file}/animation.gif", writer='imagemagick')
+            anim.save(f"./plots/{output_file}/animation_{come_model_type}_d{representation_size}_k{k}.gif", writer='imagemagick')
 
         # ### write predictions to labels_pred.txt
         # save com_learner.g_mixture to file
-        joblib.dump(com_learner.g_mixture, f'./model/g_mixture_{output_file}.joblib')
+        joblib.dump(com_learner.g_mixture, f'./model/g_mixture_{output_file}_{come_model_type}_d{representation_size}_k{k}.joblib')
         # using predictions from com_learner.g_mixture with node_embeddings
-        np.savetxt(f'./data/{output_file}/labels_pred.txt', model.classify_nodes())
+        np.savetxt(f'./data/{output_file}/labels_pred_{come_model_type}_d{representation_size}_k{k}.txt', model.classify_nodes())
 
         # ### NMI
         labels_true, _ = load_ground_true(path="data/" + input_file, file_name=input_file)
         print("labels_true: ", labels_true)
         if labels_true is not None:
             nmi = metrics.normalized_mutual_info_score(labels_true, node_classification)
-            print("===NMI=== ", nmi)
+            print(f"===NMI=== for type={come_model_type} with d={representation_size} and K={k}: ", nmi)
         else:
-            print("===NMI=== could not be computed")
+            print(f"===NMI=== for type={come_model_type} with d={representation_size} and K={k} could not be computed")
 
         # ### plotting
-        plot_name = str(k)
+        plot_name = f"{come_model_type}_d{representation_size}_k{k}"
         if should_plot:
             # graph_plot
             plot_utils.graph_plot(G,

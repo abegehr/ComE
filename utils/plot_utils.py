@@ -173,6 +173,11 @@ def get_ellipses_artists(labels=None,
             # components.
             if not np.any(labels == i):
                 continue
+
+            # higher dim -> 2D
+            mean = mean[:2]
+            covar = covar[:2,:2]
+
             # computations for showing ellipses
             v, w = np.linalg.eigh(2.5 * covar)
             v = 2. * np.sqrt(2.) * np.sqrt(v)
@@ -192,12 +197,17 @@ def get_ellipses_artists(labels=None,
     return artists
 
 
-def animate_step(ax, model, i=None, i_com=None, converged=False):
+def animate_step(ax, model, i=None, i_com=None, converged=False, max_nodes=999999, show_node_ids=True):
     # extract parameters
     # nodes
     nodes = model.node_embedding
-    # communities
     labels = model.classify_nodes()
+    # down sampling
+    if max_nodes < len(nodes):
+        nodes_i = np.random.choice(len(nodes), max_nodes, replace=False)
+        nodes = nodes[nodes_i]
+        labels = labels[nodes_i]
+    # communities
     means = model.centroid
     covars = model.covariance_mat
 
@@ -208,8 +218,9 @@ def animate_step(ax, model, i=None, i_com=None, converged=False):
     # nodes
     nodes_scatter = ax.scatter(nodes[:, 0], nodes[:, 1], 20, c=labels, marker="o")
     nodes_ids = []
-    for (i_node, node) in enumerate(nodes):
-        nodes_ids.append(ax.text(node[0], node[1], str(i_node), size=12))
+    if show_node_ids:
+        for (i_node, node) in enumerate(nodes):
+            nodes_ids.append(ax.text(node[0], node[1], str(i_node), size=12))
     # communities
     ellipses = get_ellipses_artists(labels=labels, means=means, covariances=covars)
     for ellipse in ellipses:
