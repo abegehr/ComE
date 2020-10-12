@@ -54,7 +54,7 @@ if __name__ == "__main__":
 
     number_walks = 10  # γ: number of walks for each node
     walk_length = 80  # l: length of each walk
-    representation_size = 128  # size of the embedding
+    representation_size = 4  # size of the embedding
     num_workers = 10  # number of thread
     num_iter = 3  # number of overall iteration
     com_n_init = 10  # number of inits for community embedding (default: 10)
@@ -179,7 +179,6 @@ if __name__ == "__main__":
                 with ignore_warnings(category=ConvergenceWarning):
                     com_learner.fit(model)
 
-
                 def animate_model():
                     if should_animate:
                         artists_step = plot_utils.animate_step(anim_ax,
@@ -187,7 +186,8 @@ if __name__ == "__main__":
                                                                i=i,
                                                                i_com=com_learner.n_iter,
                                                                converged=com_learner.converged,
-                                                               show_node_ids=False)
+                                                               show_node_ids=False,
+                                                               show_communities=False)
                         anim_artists.append(artists_step)
 
 
@@ -282,7 +282,8 @@ if __name__ == "__main__":
                                   labels=node_classification,
                                   plot_name=plot_name,
                                   path=f"./plots/{output_file}",
-                                  save=True)
+                                  save=True,
+                                  show_labels=False)
             # node_space_plot_2D
             plot_utils.node_space_plot_2d(model.node_embedding,
                                           labels=node_classification,
